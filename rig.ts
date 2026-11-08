@@ -728,7 +728,12 @@ async function main(args: string[]) {
       let msgs = q();
       // --wait is the listener: while it runs, deliver() stops typing into this pane (no clash with a draft)
       if (o.wait) db.run("INSERT OR REPLACE INTO settings VALUES(?,?)", [`listener.${me}`, String(process.pid)]);
-      while (o.wait && !msgs.length) { await Bun.sleep(2000); msgs = q(); }
+      while (o.wait && !msgs.length) {
+        await Bun.sleep(2000);
+        // a newer listener took over: leave the messages to it instead of reading them here
+        if (get(`listener.${me}`) !== String(process.pid)) { console.log("(replaced by a newer listener)"); return; }
+        msgs = q();
+      }
       for (const m of msgs) console.log(`${m.at} ${m.frm}${m.ticket ? ` [${m.ticket}]` : ""}: ${m.body}`);
       if (msgs.length) db.run(`UPDATE messages SET seen=1 WHERE id IN (${msgs.map(m => m.id).join(",")})`);
       else console.log("(empty)");

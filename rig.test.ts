@@ -83,3 +83,25 @@ test("install copies renamed skills only into harnesses that exist", () => {
   expect(out).not.toContain("claude:");
   expect(require("node:fs").readFileSync(join(home, ".codex/skills/rig-worker/SKILL.md"), "utf8")).toContain("name: rig-worker");
 });
+
+test("a newer inbox listener takes over: the older one exits and the message reaches the newer one", async () => {
+  const repo = tmp("rig-");
+  Bun.spawnSync(["git", "init", "-q", repo]);
+  Bun.spawnSync(["git", "-C", repo, "commit", "-q", "--allow-empty", "-m", "init"]);
+  const env = { ...process.env, HERDR_PANE_ID: "", HC_TERMINAL_ID: "", RIG_RUN: "", RIG_ROOT: "" };
+  const cli = (...args: string[]) => ["bun", join(import.meta.dir, "rig.ts"), ...args];
+  const rig = (...args: string[]) => {
+    const p = Bun.spawnSync(cli(...args), { cwd: repo, env });
+    return p.stdout.toString().trim() + p.stderr.toString().trim();
+  };
+  rig("new", "a");
+  rig("set", "harness.fake", JSON.stringify({ model: [], headless: ["bun", "-e", "console.log('worked')"] }));
+  const older = Bun.spawn(cli("inbox", "--wait"), { cwd: repo, env, stdout: "pipe" });
+  await Bun.sleep(1000);
+  const newer = Bun.spawn(cli("inbox", "--wait"), { cwd: repo, env, stdout: "pipe" });
+  await older.exited; // within one poll (2 s) of the newer listener registering
+  expect(await new Response(older.stdout).text()).toContain("replaced by a newer listener");
+  rig("dispatch", "T-1", "--harness", "fake", "--mode", "headless");
+  await newer.exited;
+  expect(await new Response(newer.stdout).text()).toContain("exited (0)");
+}, 30000);
