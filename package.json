@@ -1,0 +1,7 @@
+{
+  "name": "herdr-rig",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "rig": "./rig.ts" },
+  "scripts": { "test": "bun test" }
+}

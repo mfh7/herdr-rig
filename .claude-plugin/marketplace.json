@@ -1,0 +1,5 @@
+{
+  "name": "herdr-rig",
+  "owner": { "name": "zen" },
+  "plugins": [{ "name": "rig", "source": "./", "description": "Manager/worker/reviewer rig for herdr" }]
+}
