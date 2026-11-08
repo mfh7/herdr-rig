@@ -1,5 +1,5 @@
 {
   "name": "herdr-rig",
-  "owner": { "name": "zen" },
+  "owner": { "name": "Zanuar Tri Romadon", "url": "https://github.com/zanuartri" },
   "plugins": [{ "name": "rig", "source": "./", "description": "Manager/worker/reviewer rig for herdr" }]
 }

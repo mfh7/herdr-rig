@@ -38,6 +38,35 @@ test("ticket, messages and a headless run end to end", async () => {
   expect(board).toContain("go A");
 }, 30000);
 
+test("base branch, squash landing, --after and cleanup", async () => {
+  const repo = mkdtempSync(join(tmpdir(), "rig-"));
+  const git = (...a: string[]) => Bun.spawnSync(["git", "-C", repo, ...a]).stdout.toString().trim();
+  git("init", "-q", "-b", "main"); git("commit", "-q", "--allow-empty", "-m", "init"); git("switch", "-q", "-c", "feat");
+  const rig = (...args: string[]) => {
+    const p = Bun.spawnSync(["bun", join(import.meta.dir, "rig.ts"), ...args],
+      { cwd: repo, env: { ...process.env, HERDR_PANE_ID: "", HC_TERMINAL_ID: "", RIG_RUN: "" } });
+    return p.stdout.toString().trim() + p.stderr.toString().trim();
+  };
+  expect(rig("new")).toContain("usage"); // no title, no ticket
+  expect(rig("new", "a")).toBe("T-1");
+  expect(rig("new", "b", "--after", "T-1", "--base", "main")).toBe("T-2");
+  // the worker commits a file on its branch
+  rig("set", "harness.fake", JSON.stringify({ model: [], headless: ["sh", "-c", "echo x > f && git add f && git commit -qm f"] }));
+  rig("dispatch", "T-1", "--harness", "fake", "--mode", "headless");
+  for (let i = 0; i < 40 && !rig("inbox").includes("exited"); i++) await Bun.sleep(250);
+  expect(rig("show", "T-1")).toContain("branch rig/T-1 from feat");
+  const done = rig("edit", "T-1", "status=done");
+  expect(done).toContain("not merged, worktree kept"); // unmerged work stays
+  expect(done).toContain("T-2 is unblocked"); // to its own manager: printed, not queued
+  git("merge", "--squash", "-q", "rig/T-1"); git("commit", "-qm", "T-1");
+  expect(rig("clean", "T-1")).toContain("worktree and branch removed"); // squash merge counts as landed
+  expect(git("branch", "--list", "rig/T-1")).toBe("");
+  // a leftover folder under .rig/wt that is no longer a worktree gets swept
+  Bun.spawnSync(["mkdir", "-p", join(repo, ".rig", "wt", "T-9")]);
+  rig("clean");
+  expect(require("node:fs").existsSync(join(repo, ".rig", "wt", "T-9"))).toBe(false);
+}, 30000);
+
 test("install copies renamed skills only into harnesses that exist", () => {
   const home = mkdtempSync(join(tmpdir(), "rig-home-"));
   Bun.spawnSync(["mkdir", "-p", join(home, ".codex"), join(home, ".config")]);
