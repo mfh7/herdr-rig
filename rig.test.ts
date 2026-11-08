@@ -1,8 +1,13 @@
-import { test, expect } from "bun:test";
-import { mkdtempSync, mkdirSync } from "node:fs";
+import { test, expect, afterAll } from "bun:test";
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { argv, HARNESSES } from "./rig.ts";
+
+// every temp repo and home a test makes goes when the run ends
+const made: string[] = [];
+const tmp = (prefix: string) => { const d = mkdtempSync(join(tmpdir(), prefix)); made.push(d); return d; };
+afterAll(() => { for (const d of made) try { rmSync(d, { recursive: true, force: true }); } catch {} });
 
 test("argv expands model and sid, drops model when unset", () => {
   expect(argv(HARNESSES.claude, "headless", "opus", "S", "go")).toEqual(
@@ -11,7 +16,7 @@ test("argv expands model and sid, drops model when unset", () => {
 });
 
 test("ticket, messages and a headless run end to end", async () => {
-  const repo = mkdtempSync(join(tmpdir(), "rig-"));
+  const repo = tmp("rig-");
   Bun.spawnSync(["git", "init", "-q", repo]);
   Bun.spawnSync(["git", "-C", repo, "commit", "-q", "--allow-empty", "-m", "init"]);
   const rig = (args: string[], env: Record<string, string> = {}, stdin?: string) => {
@@ -39,7 +44,7 @@ test("ticket, messages and a headless run end to end", async () => {
 }, 30000);
 
 test("base branch, squash landing, --after and cleanup", async () => {
-  const repo = mkdtempSync(join(tmpdir(), "rig-"));
+  const repo = tmp("rig-");
   const git = (...a: string[]) => Bun.spawnSync(["git", "-C", repo, ...a]).stdout.toString().trim();
   git("init", "-q", "-b", "main"); git("commit", "-q", "--allow-empty", "-m", "init"); git("switch", "-q", "-c", "feat");
   const rig = (...args: string[]) => {
@@ -69,7 +74,7 @@ test("base branch, squash landing, --after and cleanup", async () => {
 }, 30000);
 
 test("install copies renamed skills only into harnesses that exist", () => {
-  const home = mkdtempSync(join(tmpdir(), "rig-home-"));
+  const home = tmp("rig-home-");
   for (const d of [".codex", ".config"]) mkdirSync(join(home, d), { recursive: true });
   const p = Bun.spawnSync(["bun", join(import.meta.dir, "rig.ts"), "install"], { env: { ...process.env, RIG_HOME: home } });
   const out = p.stdout.toString();
