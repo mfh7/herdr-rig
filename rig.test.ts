@@ -76,12 +76,22 @@ test("base branch, squash landing, --after and cleanup", async () => {
 test("install copies renamed skills only into harnesses that exist", () => {
   const home = tmp("rig-home-");
   for (const d of [".codex", ".config"]) mkdirSync(join(home, d), { recursive: true });
-  const p = Bun.spawnSync(["bun", join(import.meta.dir, "rig.ts"), "install"], { env: { ...process.env, RIG_HOME: home } });
+  const p = Bun.spawnSync(["bun", join(import.meta.dir, "rig.ts"), "install"], { env: { ...process.env, RIG_HOME: home, CLAUDE_CONFIG_DIR: "" } });
   const out = p.stdout.toString();
   expect(out).toContain("codex:");
   expect(out).toContain("opencode:");
   expect(out).not.toContain("claude:");
   expect(require("node:fs").readFileSync(join(home, ".codex/skills/rig-worker/SKILL.md"), "utf8")).toContain("name: rig-worker");
+});
+
+test("install puts Claude skills under CLAUDE_CONFIG_DIR when it is set", () => {
+  const home = tmp("rig-home-");
+  const profile = tmp("rig-claude-profile-");
+  const p = Bun.spawnSync(["bun", join(import.meta.dir, "rig.ts"), "install"],
+    { env: { ...process.env, RIG_HOME: home, CLAUDE_CONFIG_DIR: profile } });
+  expect(p.stdout.toString()).toContain(`claude: ${join(profile, "skills")}/rig-`);
+  expect(require("node:fs").readFileSync(join(profile, "skills/rig-manager/SKILL.md"), "utf8")).toContain("name: rig-manager");
+  expect(require("node:fs").existsSync(join(home, ".claude"))).toBe(false);
 });
 
 test("a newer inbox listener takes over: the older one exits and the message reaches the newer one", async () => {
