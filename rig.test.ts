@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { argv, HARNESSES } from "./rig.ts";
@@ -51,7 +51,8 @@ test("base branch, squash landing, --after and cleanup", async () => {
   expect(rig("new", "a")).toBe("T-1");
   expect(rig("new", "b", "--after", "T-1", "--base", "main")).toBe("T-2");
   // the worker commits a file on its branch
-  rig("set", "harness.fake", JSON.stringify({ model: [], headless: ["sh", "-c", "echo x > f && git add f && git commit -qm f"] }));
+  rig("set", "harness.fake", JSON.stringify({ model: [], headless: ["bun", "-e",
+    "require('fs').writeFileSync('f','x'); for (const a of [['add','f'],['commit','-qm','f']]) Bun.spawnSync(['git',...a])"] }));
   rig("dispatch", "T-1", "--harness", "fake", "--mode", "headless");
   for (let i = 0; i < 40 && !rig("inbox").includes("exited"); i++) await Bun.sleep(250);
   expect(rig("show", "T-1")).toContain("branch rig/T-1 from feat");
@@ -62,14 +63,14 @@ test("base branch, squash landing, --after and cleanup", async () => {
   expect(rig("clean", "T-1")).toContain("worktree and branch removed"); // squash merge counts as landed
   expect(git("branch", "--list", "rig/T-1")).toBe("");
   // a leftover folder under .rig/wt that is no longer a worktree gets swept
-  Bun.spawnSync(["mkdir", "-p", join(repo, ".rig", "wt", "T-9")]);
+  mkdirSync(join(repo, ".rig", "wt", "T-9"), { recursive: true });
   rig("clean");
   expect(require("node:fs").existsSync(join(repo, ".rig", "wt", "T-9"))).toBe(false);
 }, 30000);
 
 test("install copies renamed skills only into harnesses that exist", () => {
   const home = mkdtempSync(join(tmpdir(), "rig-home-"));
-  Bun.spawnSync(["mkdir", "-p", join(home, ".codex"), join(home, ".config")]);
+  for (const d of [".codex", ".config"]) mkdirSync(join(home, d), { recursive: true });
   const p = Bun.spawnSync(["bun", join(import.meta.dir, "rig.ts"), "install"], { env: { ...process.env, RIG_HOME: home } });
   const out = p.stdout.toString();
   expect(out).toContain("codex:");
