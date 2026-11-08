@@ -41,11 +41,12 @@ The board groups tickets by what they need from you: **Needs you · Working · R
 You need [Bun](https://bun.sh) ≥ 1.2, git, and either the [herdr](https://herdr.dev) CLI (≥ 0.9) or the herdr desktop app. `gh` is only needed for `merge pr`.
 
 ```sh
-git clone https://github.com/zanuartri/herdr-rig && cd herdr-rig
-bun link          # puts `rig` on your PATH
+bun add -g github:zanuartri/herdr-rig   # puts `rig` on your PATH
 rig install       # copies the rig-manager/-worker/-reviewer skills into every agent it finds,
                   # and the board mod into the herdr desktop app if it is installed
 ```
+
+To hack on it instead, clone the repo and run `bun link` inside it. `rig` then runs your checkout, so changes apply right away (run `rig install` again after editing a skill). To update an install, run the `bun add -g` line again.
 
 For Claude Code you can use the plugin instead: `claude plugin marketplace add zanuartri/herdr-rig`, then `claude plugin install rig@herdr-rig`.
 
