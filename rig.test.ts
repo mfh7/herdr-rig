@@ -9,6 +9,11 @@ const made: string[] = [];
 const tmp = (prefix: string) => { const d = mkdtempSync(join(tmpdir(), prefix)); made.push(d); return d; };
 afterAll(() => { for (const d of made) try { rmSync(d, { recursive: true, force: true }); } catch {} });
 
+// rig runs export RIG_ROOT, so `bun test` inside a worker inherits it; the CLI calls below must not follow it.
+// A decoy RIG_ROOT proves that: the last test checks that nothing was written there.
+const decoy = tmp("rig-decoy-");
+process.env.RIG_ROOT = decoy;
+
 test("argv expands model and sid, drops model when unset", () => {
   expect(argv(HARNESSES.claude, "headless", "opus", "S", "go")).toEqual(
     ["claude", "-p", "--dangerously-skip-permissions", "--session-id", "S", "--model", "opus", "go"]);
@@ -21,7 +26,7 @@ test("ticket, messages and a headless run end to end", async () => {
   Bun.spawnSync(["git", "-C", repo, "commit", "-q", "--allow-empty", "-m", "init"]);
   const rig = (args: string[], env: Record<string, string> = {}, stdin?: string) => {
     const p = Bun.spawnSync(["bun", join(import.meta.dir, "rig.ts"), ...args],
-      { cwd: repo, env: { ...process.env, HERDR_PANE_ID: "", HC_TERMINAL_ID: "", RIG_RUN: "", ...env }, stdin: stdin ? new Blob([stdin]) : "ignore" });
+      { cwd: repo, env: { ...process.env, HERDR_PANE_ID: "", HC_TERMINAL_ID: "", RIG_RUN: "", RIG_ROOT: "", ...env }, stdin: stdin ? new Blob([stdin]) : "ignore" });
     return p.stdout.toString().trim() + p.stderr.toString().trim();
   };
   expect(rig(["new", "Add", "thing", "--body", "-"], {}, "Goal: x")).toBe("T-1");
@@ -49,7 +54,7 @@ test("base branch, squash landing, --after and cleanup", async () => {
   git("init", "-q", "-b", "main"); git("commit", "-q", "--allow-empty", "-m", "init"); git("switch", "-q", "-c", "feat");
   const rig = (...args: string[]) => {
     const p = Bun.spawnSync(["bun", join(import.meta.dir, "rig.ts"), ...args],
-      { cwd: repo, env: { ...process.env, HERDR_PANE_ID: "", HC_TERMINAL_ID: "", RIG_RUN: "" } });
+      { cwd: repo, env: { ...process.env, HERDR_PANE_ID: "", HC_TERMINAL_ID: "", RIG_RUN: "", RIG_ROOT: "" } });
     return p.stdout.toString().trim() + p.stderr.toString().trim();
   };
   expect(rig("new")).toContain("usage"); // no title, no ticket
@@ -115,3 +120,7 @@ test("a newer inbox listener takes over: the older one exits and the message rea
   await newer.exited;
   expect(await new Response(newer.stdout).text()).toContain("exited (0)");
 }, 30000);
+
+test("no test followed the inherited RIG_ROOT", () => {
+  expect(require("node:fs").existsSync(join(decoy, ".rig"))).toBe(false);
+});
